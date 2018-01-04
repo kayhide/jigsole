@@ -10,6 +10,7 @@
   ],
   "dependencies": {
     "purescript-console": "^3.0.0",
-    "purescript-halogen": "^3.0.0"
+    "purescript-halogen": "^3.0.0",
+    "purescript-halogen-svg": "https://github.com/kwohlfahrt/purescript-halogen-svg.git#95839db822d29e935aba1266e44a17335d17cdc7"
   }
 }
