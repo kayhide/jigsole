@@ -104,12 +104,17 @@ module.exports = {
     new CopyPlugin([
       './static/favicon-16x16.png',
       './static/favicon-32x32.png',
-      './static/favicon-96x96.png'
+      './static/favicon-96x96.png',
+      {
+        from: './static/samples',
+        to: 'samples'
+      }
     ]),
     new HtmlExcludeAssetsPlugin(),
-    new CleanupPlugin(),
     new OmitPlugin({
       chunks: _.keys(entries.static)
-    })
+    }),
+
+    ...(process.env.DEPLOYING ? [ new CleanupPlugin() ] : [])
   ]
 };
