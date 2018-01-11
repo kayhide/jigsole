@@ -3,21 +3,18 @@ module Component where
 import Prelude
 
 import Control.Monad.Aff (Aff)
-import Control.Monad.Eff (Eff)
-import Control.Monad.Eff.Random (RANDOM, randomRange)
+import Control.Monad.Eff.Random (RANDOM)
 import DOM.Event.MouseEvent (MouseEvent)
 import Data.Array as Array
-import Data.Geometry (Point, Box)
-import Data.Int (toNumber)
+import Data.Geometry (Box, Face(..), Point)
 import Data.Lens (Lens, _Just, assign, modifying)
 import Data.Lens.Index (ix)
 import Data.Lens.Record (prop)
 import Data.Map (Map)
 import Data.Map as Map
 import Data.Maybe (Maybe(Just, Nothing))
+import Data.Profunctor.Strong ((&&&))
 import Data.Symbol (SProxy(..))
-import Data.Tuple (Tuple(..))
-import Data.Unfoldable (replicateA)
 import Ext.Svg.Attributes as ESA
 import Ext.Svg.Elements as ESE
 import Halogen as H
@@ -25,8 +22,8 @@ import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HA
 import Halogen.HTML.Properties as HP
-import Math as Math
-import Svg.Attributes (Transform(..))
+import Sample as Sample
+import Svg.Attributes (Command(..), D(..), Transform(..))
 import Svg.Attributes as SA
 import Svg.Elements as SE
 import Util as Util
@@ -36,12 +33,9 @@ type PieceMap = Map PieceId Piece
 
 type Piece =
   { id :: PieceId
-  , circle :: Circle
+  , face :: Face
   , transform :: Array Transform
   }
-
-_circle :: forall a b r. Lens { circle :: a | r } { circle :: b | r } a b
-_circle = prop (SProxy :: SProxy "circle")
 
 data Query a
   = Initialize a
@@ -51,13 +45,6 @@ data Query a
 
 type Input = Unit
 
-type Circle =
-  { point :: Point
-  , r :: Number
-  }
-
-_point :: forall a b r. Lens { point :: a | r } { point :: b | r } a b
-_point = prop (SProxy :: SProxy "point")
 
 type Selection =
   { pieceId :: PieceId
@@ -86,10 +73,7 @@ _viewBox = prop (SProxy :: SProxy "viewBox")
 _selection :: forall a b r. Lens { selection :: a | r } { selection :: b | r } a b
 _selection = prop (SProxy :: SProxy "selection")
 
-count :: Int
-count = 200
-
-type Eff_ eff = Aff (random :: RANDOM | eff)
+type Eff_ eff = Aff (ajax :: AJAX | eff)
 
 ui :: forall eff. H.Component HH.HTML Query Input Void (Eff_ eff)
 ui =
@@ -163,27 +147,51 @@ render state =
         ]
       ]
 
-    renderPiece { id, circle: { point, r }, transform } =
+    renderPiece { id, face, transform } =
       SE.g
       [
        HE.onMouseDown $ HE.input $ Capture id
       , SA.transform transform
       ]
       [
-        SE.circle
-        [ SA.cx point.x
-        , SA.cy point.y
-        , SA.r r
-        , ESA.fill "url(#img1)"
-        ]
+        renderFace face
       ]
+
+    renderFace (Circle { point, r }) =
+      SE.circle
+      [ SA.cx point.x
+      , SA.cy point.y
+      , SA.r r
+      , ESA.fill "url(#img1)"
+      ]
+
+    renderFace (Curved { points }) =
+      SE.path
+      [ SA.d ds
+      , ESA.fill "url(#img1)"
+      ]
+      where
+        toM (Just { x, y }) = M x y
+        toM _ = Z
+        toC [ Nothing, Nothing, Just { x, y } ] = L x y
+        toC [ Just pt1, Just pt2, Just pt3 ] = C pt1.x pt1.y pt2.x pt2.y pt3.x pt3.y
+        toC _ = Z
+        ds =
+          Array.concat
+          [ (Abs <<< toM) <$> Array.take 1 points
+          , (Abs <<< toC) <$> eachSlice 3 (Array.drop 1 points)
+          ]
+
+        eachSlice i [] = []
+        eachSlice i xs = [ Array.take i xs ] <> eachSlice i (Array.drop i xs)
 
 eval :: forall eff. Query ~> H.ComponentDSL State Query Void (Eff_ eff)
 eval (Initialize next) = do
   viewBox <- H.gets _.viewBox
-  circles <- H.liftEff $ replicateA count $ randomCircle viewBox
-  let pieces = Map.fromFoldable $ Array.mapWithIndex (\id circle -> Tuple id { id, circle, transform }) circles
-      transform = []
+  let transform = []
+  let puzzle = Sample.puzzle_400_300_6
+      pieces = Map.fromFoldable
+               $ (_.id &&& (\{ id, points } -> { id, face: Curved { points }, transform })) <$> puzzle.pieces
   assign _pieces pieces
   H.liftEff $ Util.loadImage "image" "samples/IMG_2062.jpg"
   pure next
@@ -219,16 +227,3 @@ push ts t@(Translate dx1 dy1) = case Array.unsnoc ts of
   Just { init, last: (Translate dx0 dy0) } -> Array.snoc init $ Translate (dx0 + dx1) (dy0 + dy1)
   _ -> Array.snoc ts t
 push ts t = Array.snoc ts t
-
-randomCircle :: forall eff. Box -> Eff (random :: RANDOM | eff) Circle
-randomCircle box = do
-  point <- randomPoint box
-  let r0 = 0.4 / Math.sqrt (toNumber count)
-  r <- ((min box.size.w box.size.h) * _) <$> randomRange r0 (2.0 * r0)
-  pure { point, r }
-
-randomPoint :: forall eff. Box -> Eff (random :: RANDOM | eff) Point
-randomPoint { point, size } = do
-  x <- randomRange point.x $ point.x + size.w
-  y <- randomRange point.y $ point.y + size.h
-  pure { x, y }

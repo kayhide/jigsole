@@ -12,7 +12,9 @@
     "purescript-console": "^3.0.0",
     "purescript-halogen": "^3.0.0",
     "purescript-halogen-svg": "https://github.com/kwohlfahrt/purescript-halogen-svg.git#95839db822d29e935aba1266e44a17335d17cdc7",
-    "purescript-random": "^3.0.0"
+    "purescript-random": "^3.0.0",
+    "purescript-foreign-generic": "^5.0.0",
+    "purescript-record-show": "^0.4.0"
   },
   "devDependencies": {
     "purescript-psci-support": "^3.0.0"
