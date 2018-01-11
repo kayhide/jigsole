@@ -5,7 +5,7 @@ import Prelude
 import Control.Monad.Aff (Aff)
 import DOM.Event.MouseEvent (MouseEvent)
 import Data.Array as Array
-import Data.Geometry (Box, Face(..), Point)
+import Data.Geometry (Face(Curved, Circle), Point, Size)
 import Data.Lens (Lens, _Just, assign, modifying)
 import Data.Lens.Index (ix)
 import Data.Lens.Record (prop)
@@ -59,13 +59,16 @@ _lastPoint = prop (SProxy :: SProxy "lastPoint")
 
 type State =
   { pieces :: PieceMap
-  , viewBox :: Box
+  , puzzleSize :: Size
   , selection :: Maybe Selection
   , down :: Boolean
   }
 
 _pieces :: forall a b r. Lens { pieces :: a | r } { pieces :: b | r } a b
 _pieces = prop (SProxy :: SProxy "pieces")
+
+_puzzleSize :: forall a b r. Lens { puzzleSize :: a | r } { puzzleSize :: b | r } a b
+_puzzleSize = prop (SProxy :: SProxy "puzzleSize")
 
 _viewBox :: forall a b r. Lens { viewBox :: a | r } { viewBox :: b | r } a b
 _viewBox = prop (SProxy :: SProxy "viewBox")
@@ -89,13 +92,10 @@ ui =
 initialState :: Input -> State
 initialState _ =
   { pieces: Map.empty
-  , viewBox: { point, size }
+  , puzzleSize: { w: 0.0, h: 0.0 }
   , selection: Nothing
   , down: false
   }
-  where
-    size = { w: 400.0, h: 300.0 }
-    point = { x: 0.0, y: 0.0 }
 
 render :: State -> H.ComponentHTML Query
 render state =
@@ -106,7 +106,7 @@ render state =
   ]
   [
     SE.svg
-    [ SA.viewBox viewBox.point.x viewBox.point.y viewBox.size.w viewBox.size.h
+    [ SA.viewBox 0.0 0.0 puzzleSize.w puzzleSize.h
     ]
     [
       ESE.defs [] [ renderPattern ]
@@ -115,7 +115,7 @@ render state =
       $ Array.fromFoldable $ renderPiece <$> pieces
     ]
   , SE.svg
-    [ SA.viewBox viewBox.point.x viewBox.point.y viewBox.size.w viewBox.size.h
+    [ SA.viewBox 0.0 0.0 puzzleSize.w puzzleSize.h
     , HA.id_ "selected-layer"
     ]
     [
@@ -126,24 +126,24 @@ render state =
   ]
 
   where
-    viewBox = state.viewBox
     pieces = state.pieces
+    puzzleSize = state.puzzleSize
     selection = state.selection
 
     renderPattern =
       ESE.pattern
       [ HA.id_ "img1"
       , ESA.patternUnits "userSpaceOnUse"
-      , SA.width 400.0
-      , SA.height 300.0
+      , SA.width puzzleSize.w
+      , SA.height puzzleSize.h
       ]
       [
         ESE.image
         [ HA.id_ "image"
         , SA.x 0.0
         , SA.y 0.0
-        , SA.width 400.0
-        , SA.height 300.0
+        , SA.width puzzleSize.w
+        , SA.height puzzleSize.h
         ]
       ]
 
@@ -187,7 +187,6 @@ render state =
 
 eval :: forall eff. Query ~> H.ComponentDSL State Query Void (Eff_ eff)
 eval (Initialize next) = do
-  viewBox <- H.gets _.viewBox
   -- puzzle <- H.liftAff $ Sample.loadPuzzle "puzzle_400x300_6"
   puzzle <- H.liftAff $ Sample.loadPuzzle "puzzle_400x300_88"
   -- puzzle <- H.liftAff $ Sample.loadPuzzle "puzzle_400x300_972"
@@ -195,6 +194,7 @@ eval (Initialize next) = do
       toPiece { id, points } = { id, face: Curved { points }, transform }
       pieces = Map.fromFoldable $ (_.id &&& toPiece) <$> puzzle.pieces
   assign _pieces pieces
+  assign _puzzleSize puzzle.size
   H.liftEff $ Util.loadImage "image" "samples/IMG_2062.jpg"
   pure next
 
