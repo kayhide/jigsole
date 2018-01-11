@@ -6,13 +6,15 @@ import Component.PlayboardUI.BaseUI (_transform)
 import Component.PlayboardUI.BaseUI as BaseUI
 import Component.PlayboardUI.Element as Element
 import Control.Monad.Aff (Aff)
+import Control.MonadZero (guard)
 import DOM.Event.MouseEvent (MouseEvent)
+import DOM.Event.WheelEvent (WheelEvent)
 import Data.Array as Array
 import Data.Const (Const)
 import Data.Geometry (Point)
 import Data.Lens (Lens, _Just, assign, modifying, use)
 import Data.Lens.Record (prop)
-import Data.Maybe (Maybe(Just, Nothing), maybe)
+import Data.Maybe (Maybe(Just, Nothing), fromMaybe, maybe)
 import Data.Puzzle (Puzzle)
 import Data.Symbol (SProxy(..))
 import Halogen as H
@@ -36,6 +38,7 @@ data Query a
   | MouseUp MouseEvent a
   | Drag MouseEvent a
   | Release MouseEvent a
+  | Wheel WheelEvent a
   | HandleBaseUI BaseUI.Message a
 
 type Input = Unit
@@ -107,6 +110,7 @@ render state =
   , HE.onMouseDown $ HE.input MouseDown
   , HE.onMouseUp $ HE.input MouseUp
   , HE.onMouseMove $ HE.input Drag
+  , HE.onWheel $ HE.input Wheel
   ]
   $ Array.fromFoldable (renderPuzzle <$> state.puzzle)
   <> Array.fromFoldable (renderSelection <$> state.puzzle)
@@ -154,16 +158,24 @@ eval (MouseUp event next) = do
   pure next
 
 eval (Drag event next) = do
+  let currentPoint = Util.localPoint event
   { selection, down } <- H.get
   when down $ case selection of
     Just { piece, lastPoint } -> do
-      let updater transform = push transform $ Translate dx dy
-          currentPoint = Util.localPoint event
+      let updater transform = push transform $ SA.Translate dx dy
           dx = currentPoint.x - lastPoint.x
           dy = currentPoint.y - lastPoint.y
       modifying (_selection <<< _Just <<< _piece <<< _transform) updater
-      assign (_selection <<< _Just <<< _lastPoint) currentPoint
+      assign (_selection <<< _Just <<< _lastPoint) $ currentPoint
+    Nothing -> pure unit
+  pure next
 
+eval (Wheel event next) = do
+  H.gets _.selection >>= case _ of
+    Just { piece, lastPoint } -> do
+      let updater transform = push transform $ SA.Rotate delta lastPoint.x lastPoint.y
+          delta = Util.delta event
+      modifying (_selection <<< _Just <<< _piece <<< _transform) updater
     Nothing -> pure unit
   pure next
 
@@ -182,9 +194,15 @@ eval (HandleBaseUI (BaseUI.Picked piece lastPoint) next) = do
   pure next
 
 push :: Array Transform -> Transform -> Array Transform
-push ts t@(Translate dx1 dy1) = case Array.unsnoc ts of
-  Just { init, last: (Translate dx0 dy0) } ->
-    Array.snoc init $ Translate (dx0 + dx1) (dy0 + dy1)
-  _ ->
-    Array.snoc ts t
-push ts t = Array.snoc ts t
+push ts t1 = fromMaybe (Array.cons t1 ts) do
+  { head: t0, tail } <- Array.uncons ts
+  case { t0, t1 } of
+    { t0: Translate dx0 dy0, t1: Translate dx1 dy1 } ->
+      pure $ Array.cons (Translate (dx0 + dx1) (dy0 + dy1)) tail
+
+    { t0: Rotate da0 x0 y0, t1: Rotate da1 x1 y1 } -> do
+      guard $ x0 == x1 && y0 == y1
+      pure $ Array.cons (Rotate (da0 + da1) x0 y0) tail
+
+    _ ->
+      Nothing
