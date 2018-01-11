@@ -27,6 +27,13 @@
     left: 0;
 }
 
+.fill-image {
+    fill: url(#img1);
+}
+
+#base-layer {
+}
+
 #selected-layer {
     pointer-events: none;
     filter: drop-shadow( 0 0 5px #3af );

@@ -18,6 +18,7 @@ import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HA
+import Halogen.HTML.Properties as HP
 import Network.HTTP.Affjax (AJAX)
 import Svg.Attributes (Transform)
 import Svg.Attributes as SA
@@ -88,6 +89,7 @@ render :: State -> H.ComponentHTML Query
 render state =
   SE.svg
   [ SA.viewBox 0.0 0.0 puzzleSize.w puzzleSize.h
+  , HP.id_ "base-layer"
   ]
   [
     ESE.defs [] [ renderPattern ]
@@ -124,7 +126,7 @@ render state =
       , SA.transform transform
       ]
       [
-        Element.renderFace face $ Just "url(#img1)"
+        Element.renderFace face
       ]
 
 

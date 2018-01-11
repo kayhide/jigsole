@@ -5,26 +5,23 @@ import Prelude
 import Data.Array as Array
 import Data.Geometry (Face(..))
 import Data.Maybe (Maybe(..))
-import Ext.Svg.Attributes as ESA
 import Halogen.HTML as HH
 import Svg.Attributes (Command(Z, C, L, M), D(Abs))
 import Svg.Attributes as SA
 import Svg.Elements as SE
 
-renderFace :: forall p i. Face -> Maybe String -> HH.HTML p i
-renderFace (Circle { point, r }) fill =
+renderFace :: forall p i. Face -> HH.HTML p i
+renderFace (Circle { point, r }) =
   SE.circle
   $ [ SA.cx point.x
     , SA.cy point.y
     , SA.r r
     ]
-  <> Array.fromFoldable (ESA.fill <$> fill)
 
-renderFace (Curved { points }) fill =
+renderFace (Curved { points }) =
   SE.path
   $ [ SA.d ds
     ]
-  <> Array.fromFoldable (ESA.fill <$> fill)
   where
     toM (Just { x, y }) = M x y
     toM _ = Z

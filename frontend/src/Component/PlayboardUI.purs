@@ -103,7 +103,8 @@ initialState _ =
 render :: forall eff. State -> H.ParentHTML Query ChildQuery ChildSlot (Eff_ eff)
 render state =
   HH.div
-  [ HP.class_ $ H.ClassName "playboard"
+  [ HP.class_ $ H.ClassName "playboard fill-image"
+  , HE.onMouseDown $ HE.input MouseDown
   , HE.onMouseUp $ HE.input MouseUp
   , HE.onMouseMove $ HE.input Drag
   ]
@@ -111,8 +112,6 @@ render state =
   <> Array.fromFoldable (renderSelection <$> state.puzzle)
 
   where
-    selection = state.selection
-
     renderPuzzle puzzle =
       HH.slot' cpBaseUI BaseUI.Slot BaseUI.ui puzzle $ HE.input HandleBaseUI
 
@@ -133,7 +132,7 @@ render state =
       [ SA.transform transform
       ]
       [
-        Element.renderFace face $ Just "url(#img1)"
+        Element.renderFace face
       ]
 
 eval :: forall eff. Query ~> H.ParentDSL State Query ChildQuery ChildSlot Message (Eff_ eff)
@@ -146,9 +145,8 @@ eval (Initialize next) = do
   pure next
 
 eval (MouseDown event next) = do
-  let currentPoint = Util.localPoint event
   assign _down true
-  assign (_selection <<< _Just <<< _lastPoint) currentPoint
+  assign (_selection <<< _Just <<< _lastPoint) $ Util.localPoint event
   pure next
 
 eval (MouseUp event next) = do
@@ -181,7 +179,6 @@ eval (HandleBaseUI (BaseUI.Picked piece lastPoint) next) = do
     maybe (pure unit)
     (void <<< H.query' cpBaseUI BaseUI.Slot <<< H.action <<< BaseUI.Push <<< _.piece)
   assign _selection $ Just { piece, lastPoint }
-  assign _down true
   pure next
 
 push :: Array Transform -> Transform -> Array Transform
