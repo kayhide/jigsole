@@ -4,11 +4,11 @@ import Prelude
 
 import Component (ui)
 import Control.Monad.Eff (Eff)
-import Control.Monad.Eff.Random (RANDOM)
 import Halogen.Aff as HA
 import Halogen.VDom.Driver (runUI)
+import Network.HTTP.Affjax (AJAX)
 
-main :: Eff (HA.HalogenEffects (random :: RANDOM)) Unit
+main :: Eff (HA.HalogenEffects (ajax :: AJAX)) Unit
 main = HA.runHalogenAff do
   body <- HA.awaitBody
   runUI ui unit body

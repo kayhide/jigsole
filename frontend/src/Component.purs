@@ -3,7 +3,6 @@ module Component where
 import Prelude
 
 import Control.Monad.Aff (Aff)
-import Control.Monad.Eff.Random (RANDOM)
 import DOM.Event.MouseEvent (MouseEvent)
 import Data.Array as Array
 import Data.Geometry (Box, Face(..), Point)
@@ -22,6 +21,7 @@ import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HA
 import Halogen.HTML.Properties as HP
+import Network.HTTP.Affjax (AJAX)
 import Sample as Sample
 import Svg.Attributes (Command(..), D(..), Transform(..))
 import Svg.Attributes as SA
@@ -188,10 +188,12 @@ render state =
 eval :: forall eff. Query ~> H.ComponentDSL State Query Void (Eff_ eff)
 eval (Initialize next) = do
   viewBox <- H.gets _.viewBox
+  -- puzzle <- H.liftAff $ Sample.loadPuzzle "puzzle_400x300_6"
+  puzzle <- H.liftAff $ Sample.loadPuzzle "puzzle_400x300_88"
+  -- puzzle <- H.liftAff $ Sample.loadPuzzle "puzzle_400x300_972"
   let transform = []
-  let puzzle = Sample.puzzle_400_300_6
-      pieces = Map.fromFoldable
-               $ (_.id &&& (\{ id, points } -> { id, face: Curved { points }, transform })) <$> puzzle.pieces
+      toPiece { id, points } = { id, face: Curved { points }, transform }
+      pieces = Map.fromFoldable $ (_.id &&& toPiece) <$> puzzle.pieces
   assign _pieces pieces
   H.liftEff $ Util.loadImage "image" "samples/IMG_2062.jpg"
   pure next
