@@ -121,7 +121,7 @@ render state =
 
     renderSelection puzzle =
       SE.svg
-      [ SA.viewBox 0.0 0.0 puzzle.size.w puzzle.size.h
+      [ SA.viewBox (- size.w * 0.5) (- size.h * 0.5) (size.w * 2.0) (size.h * 2.0)
       , HA.id_ "selected-layer"
       , HE.onMouseDown $ HE.input MouseDown
       ]
@@ -130,6 +130,8 @@ render state =
         []
         $ Array.fromFoldable (renderPiece <<< _.piece <$> state.selection)
       ]
+      where
+        size = puzzle.size
 
     renderPiece { face, transform } =
       SE.g

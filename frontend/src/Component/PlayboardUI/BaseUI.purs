@@ -88,7 +88,7 @@ initialState puzzle =
 render :: State -> H.ComponentHTML Query
 render state =
   SE.svg
-  [ SA.viewBox 0.0 0.0 puzzleSize.w puzzleSize.h
+  [ SA.viewBox (- size.w * 0.5) (- size.h * 0.5) (size.w * 2.0) (size.h * 2.0)
   , HP.id_ "base-layer"
   ]
   [
@@ -100,22 +100,22 @@ render state =
 
   where
     pieces = state.pieces
-    puzzleSize = state.puzzle.size
+    size = state.puzzle.size
 
     renderPattern =
       ESE.pattern
       [ HA.id_ "img1"
       , ESA.patternUnits "userSpaceOnUse"
-      , SA.width puzzleSize.w
-      , SA.height puzzleSize.h
+      , SA.width size.w
+      , SA.height size.h
       ]
       [
         ESE.image
         [ HA.id_ "image"
         , SA.x 0.0
         , SA.y 0.0
-        , SA.width puzzleSize.w
-        , SA.height puzzleSize.h
+        , SA.width size.w
+        , SA.height size.h
         ]
       ]
 
