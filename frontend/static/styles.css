@@ -31,3 +31,7 @@
     pointer-events: none;
     filter: drop-shadow( 0 0 5px #3af );
 }
+
+#selected-layer g {
+    pointer-events: fill;
+}
