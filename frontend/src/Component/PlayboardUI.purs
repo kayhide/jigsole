@@ -2,19 +2,17 @@ module Component.PlayboardUI where
 
 import Prelude
 
-import Component.PlayboardUI.BaseUI (_transform)
 import Component.PlayboardUI.BaseUI as BaseUI
-import Component.PlayboardUI.Element as Element
+import Component.PlayboardUI.SelectionUI as SelectionUI
 import Control.Monad.Aff (Aff)
-import Control.MonadZero (guard)
 import DOM.Event.MouseEvent (MouseEvent)
 import DOM.Event.WheelEvent (WheelEvent)
 import Data.Array as Array
 import Data.Const (Const)
 import Data.Geometry (Point)
-import Data.Lens (Lens, _Just, assign, modifying, use)
+import Data.Lens (Lens, assign, use)
 import Data.Lens.Record (prop)
-import Data.Maybe (Maybe(Just, Nothing), fromMaybe, maybe)
+import Data.Maybe (Maybe(Nothing, Just))
 import Data.Puzzle (Puzzle)
 import Data.Symbol (SProxy(..))
 import Halogen as H
@@ -22,13 +20,9 @@ import Halogen.Component.ChildPath as CP
 import Halogen.Data.Prism (type (<\/>), type (\/))
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
-import Halogen.HTML.Properties as HA
 import Halogen.HTML.Properties as HP
 import Network.HTTP.Affjax (AJAX)
 import Sample as Sample
-import Svg.Attributes (Transform(..))
-import Svg.Attributes as SA
-import Svg.Elements as SE
 import Util as Util
 
 
@@ -40,6 +34,7 @@ data Query a
   | Release MouseEvent a
   | Wheel WheelEvent a
   | HandleBaseUI BaseUI.Message a
+  | HandleSelectionUI SelectionUI.Message a
 
 type Input = Unit
 
@@ -47,41 +42,40 @@ type Message = Void
 
 type State =
   { puzzle :: Maybe Puzzle
-  , selection :: Maybe Selection
+  , point :: Point
+  , upPoint :: Maybe Point
   , down :: Boolean
   }
 
 _puzzle :: forall a b r. Lens { puzzle :: a | r } { puzzle :: b | r } a b
 _puzzle = prop (SProxy :: SProxy "puzzle")
 
-_selection :: forall a b r. Lens { selection :: a | r } { selection :: b | r } a b
-_selection = prop (SProxy :: SProxy "selection")
+_point :: forall a b r. Lens { point :: a | r } { point :: b | r } a b
+_point = prop (SProxy :: SProxy "point")
+
+_upPoint :: forall a b r. Lens { upPoint :: a | r } { upPoint :: b | r } a b
+_upPoint = prop (SProxy :: SProxy "upPoint")
 
 _down :: forall a b r. Lens { down :: a | r } { down :: b | r } a b
 _down = prop (SProxy :: SProxy "down")
 
-type Selection =
-  { piece :: BaseUI.Piece
-  , lastPoint :: Point
-  }
-
-_piece :: forall a b r. Lens { piece :: a | r } { piece :: b | r } a b
-_piece = prop (SProxy :: SProxy "piece")
-
-_lastPoint :: forall a b r. Lens { lastPoint :: a | r } { lastPoint :: b | r } a b
-_lastPoint = prop (SProxy :: SProxy "lastPoint")
-
 
 type ChildQuery
   = BaseUI.Query
+    <\/> SelectionUI.Query
     <\/> Const Void
 
 type ChildSlot
   = BaseUI.Slot
+    \/ SelectionUI.Slot
     \/ Void
 
 cpBaseUI :: CP.ChildPath BaseUI.Query ChildQuery BaseUI.Slot ChildSlot
 cpBaseUI = CP.cp1
+
+cpSelectionUI :: CP.ChildPath SelectionUI.Query ChildQuery SelectionUI.Slot ChildSlot
+cpSelectionUI = CP.cp2
+
 
 type Eff_ eff = Aff (ajax :: AJAX | eff)
 
@@ -99,7 +93,8 @@ ui =
 initialState :: Input -> State
 initialState _ =
   { puzzle: Nothing
-  , selection: Nothing
+  , point: { x: 0.0, y: 0.0 }
+  , upPoint: Nothing
   , down: false
   }
 
@@ -120,26 +115,8 @@ render state =
       HH.slot' cpBaseUI BaseUI.Slot BaseUI.ui puzzle $ HE.input HandleBaseUI
 
     renderSelection puzzle =
-      SE.svg
-      [ SA.viewBox (- size.w * 0.5) (- size.h * 0.5) (size.w * 2.0) (size.h * 2.0)
-      , HA.id_ "selected-layer"
-      , HE.onMouseDown $ HE.input MouseDown
-      ]
-      [
-        SE.g
-        []
-        $ Array.fromFoldable (renderPiece <<< _.piece <$> state.selection)
-      ]
-      where
-        size = puzzle.size
+      HH.slot' cpSelectionUI SelectionUI.Slot SelectionUI.ui puzzle $ HE.input HandleSelectionUI
 
-    renderPiece { face, transform } =
-      SE.g
-      [ SA.transform transform
-      ]
-      [
-        Element.renderFace face
-      ]
 
 eval :: forall eff. Query ~> H.ParentDSL State Query ChildQuery ChildSlot Message (Eff_ eff)
 eval (Initialize next) = do
@@ -152,59 +129,49 @@ eval (Initialize next) = do
 
 eval (MouseDown event next) = do
   assign _down true
-  assign (_selection <<< _Just <<< _lastPoint) $ Util.localPoint event
   pure next
 
 eval (MouseUp event next) = do
+  assign _upPoint $ Just $ Util.localPoint event
   assign _down false
   pure next
 
 eval (Drag event next) = do
-  let currentPoint = Util.localPoint event
-  { selection, down } <- H.get
-  when down $ case selection of
-    Just { piece, lastPoint } -> do
-      let updater transform = push transform $ SA.Translate dx dy
-          dx = currentPoint.x - lastPoint.x
-          dy = currentPoint.y - lastPoint.y
-      modifying (_selection <<< _Just <<< _piece <<< _transform) updater
-      assign (_selection <<< _Just <<< _lastPoint) $ currentPoint
-    Nothing -> pure unit
+  let pt1 = Util.localPoint event
+  use _down >>= case _ of
+    true -> do
+      pt0 <- use _point
+      let args = Util.diff pt1 pt0
+      void $ H.query' cpSelectionUI SelectionUI.Slot $ H.action $ SelectionUI.Move args
+
+    false -> do
+      d0 <- (map ((2.0 * _) <<< _.linear_measure)) <$> H.gets _.puzzle
+      d1 <- (map $ Util.distance pt1) <$> use _upPoint
+      let b = (<) <$> d0 <*> d1
+      when (b == Just true) $ do
+        void $ H.query' cpSelectionUI SelectionUI.Slot $ H.action SelectionUI.Release
+        assign _upPoint Nothing
+
+      pure unit
+
+  assign _point pt1
   pure next
 
 eval (Wheel event next) = do
-  H.gets _.selection >>= case _ of
-    Just { piece, lastPoint } -> do
-      let updater transform = push transform $ SA.Rotate delta lastPoint.x lastPoint.y
-          delta = Util.delta event
-      modifying (_selection <<< _Just <<< _piece <<< _transform) updater
-    Nothing -> pure unit
+  center <- H.gets _.point
+  let delta = Util.delta event
+      args = { delta, center }
+  void $ H.query' cpSelectionUI SelectionUI.Slot $ H.action $ SelectionUI.Spin args
   pure next
 
 eval (Release event next) = do
-  use _selection >>=
-    maybe (pure unit)
-    (void <<< H.query' cpBaseUI BaseUI.Slot <<< H.action <<< BaseUI.Push <<< _.piece)
-  assign _selection Nothing
+  void $ H.query' cpSelectionUI SelectionUI.Slot $ H.action SelectionUI.Release
   pure next
 
-eval (HandleBaseUI (BaseUI.Picked piece lastPoint) next) = do
-  use _selection >>=
-    maybe (pure unit)
-    (void <<< H.query' cpBaseUI BaseUI.Slot <<< H.action <<< BaseUI.Push <<< _.piece)
-  assign _selection $ Just { piece, lastPoint }
+eval (HandleBaseUI (BaseUI.Picked piece) next) = do
+  void $ H.query' cpSelectionUI SelectionUI.Slot $ H.action $ SelectionUI.Capture piece
   pure next
 
-push :: Array Transform -> Transform -> Array Transform
-push ts t1 = fromMaybe (Array.cons t1 ts) do
-  { head: t0, tail } <- Array.uncons ts
-  case { t0, t1 } of
-    { t0: Translate dx0 dy0, t1: Translate dx1 dy1 } ->
-      pure $ Array.cons (Translate (dx0 + dx1) (dy0 + dy1)) tail
-
-    { t0: Rotate da0 x0 y0, t1: Rotate da1 x1 y1 } -> do
-      guard $ x0 == x1 && y0 == y1
-      pure $ Array.cons (Rotate (da0 + da1) x0 y0) tail
-
-    _ ->
-      Nothing
+eval (HandleSelectionUI (SelectionUI.Released piece) next) = do
+  void $ H.query' cpBaseUI BaseUI.Slot $ H.action $ BaseUI.Push $ piece
+  pure next

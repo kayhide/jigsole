@@ -20,6 +20,7 @@ var Svg = {
 exports.localPoint = function(event) {
   const svg = event.target.closest('svg');
   const pt = Svg.createPoint(event.clientX, event.clientY);
+  console.log({x: event.clientX, y: event.clientY});
   return pt.matrixTransform(svg.getScreenCTM().inverse());
 };
 

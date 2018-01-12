@@ -6,7 +6,7 @@ import Component.PlayboardUI.Element as Element
 import Control.Monad.Aff (Aff)
 import DOM.Event.MouseEvent (MouseEvent)
 import Data.Array as Array
-import Data.Geometry (Face(Curved), Point)
+import Data.Geometry (Face(Curved))
 import Data.Lens (Lens, modifying)
 import Data.Lens.Record (prop)
 import Data.Maybe (Maybe(Just, Nothing))
@@ -23,7 +23,6 @@ import Network.HTTP.Affjax (AJAX)
 import Svg.Attributes (Transform)
 import Svg.Attributes as SA
 import Svg.Elements as SE
-import Util as Util
 
 
 data Slot = Slot
@@ -51,7 +50,7 @@ data Query a
 type Input = Puzzle
 
 data Message
-  = Picked Piece Point
+  = Picked Piece
 
 type State =
   { puzzle :: Puzzle
@@ -135,8 +134,7 @@ eval (Initialize next) = do
   pure next
 
 eval (Pick piece event next) = do
-  let point = Util.localPoint event
-  H.raise $ Picked piece point
+  H.raise $ Picked piece
   modifying _pieces $ Array.filter (notEq piece.id <<< _.id)
   pure next
 

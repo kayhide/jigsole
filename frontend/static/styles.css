@@ -34,11 +34,11 @@
 #base-layer {
 }
 
-#selected-layer {
+#selection-layer {
     pointer-events: none;
-    filter: drop-shadow( 0 0 5px #3af );
+    filter: drop-shadow( 0 0 5px #666 );
 }
 
-#selected-layer g {
+#selection-layer g {
     pointer-events: fill;
 }
