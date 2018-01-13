@@ -2,7 +2,7 @@ module Component.PlayboardUI.SelectionUI where
 
 import Prelude
 
-import Component.PlayboardUI.BaseUI (Piece, _transform)
+import Component.PlayboardUI.BaseUI (Chunk, _transform)
 import Component.PlayboardUI.Element as Element
 import Control.Monad.Aff (Aff)
 import Control.MonadZero (guard)
@@ -38,32 +38,27 @@ type SpinArgs =
 
 data Query a
   = Initialize a
-  | Capture Piece a
+  | Capture Chunk a
   | Release a
   | Move MoveArgs a
   | Spin SpinArgs a
+  | AskChunk (Maybe Chunk -> a)
 
 type Input = Puzzle
 
 data Message
-  = Released Piece
+  = Released Chunk
 
 type State =
   { puzzle :: Puzzle
-  , pieces :: Array Piece
+  , chunks :: Array Chunk
   }
 
 _puzzle :: forall a b r. Lens { puzzle :: a | r } { puzzle :: b | r } a b
 _puzzle = prop (SProxy :: SProxy "puzzle")
 
-_pieces :: forall a b r. Lens { pieces :: a | r } { pieces :: b | r } a b
-_pieces = prop (SProxy :: SProxy "pieces")
-
-_down :: forall a b r. Lens { down :: a | r } { down :: b | r } a b
-_down = prop (SProxy :: SProxy "down")
-
-_lastPoint :: forall a b r. Lens { lastPoint :: a | r } { lastPoint :: b | r } a b
-_lastPoint = prop (SProxy :: SProxy "lastPoint")
+_chunks :: forall a b r. Lens { chunks :: a | r } { chunks :: b | r } a b
+_chunks = prop (SProxy :: SProxy "chunks")
 
 
 type Eff_ eff = Aff eff
@@ -82,7 +77,7 @@ ui =
 initialState :: Input -> State
 initialState puzzle =
   { puzzle
-  , pieces: []
+  , chunks: []
   }
 
 render :: State -> H.ComponentHTML Query
@@ -94,13 +89,13 @@ render state =
   [
     SE.g
     []
-    $ (renderPiece <$> state.pieces)
+    $ (renderChunk <$> state.chunks)
   ]
 
   where
     size = state.puzzle.size
 
-    renderPiece { face, transform } =
+    renderChunk { face, transform } =
       SE.g
       [ SA.transform transform
       ]
@@ -112,25 +107,28 @@ eval :: forall eff. Query ~> H.ComponentDSL State Query Message (Eff_ eff)
 eval (Initialize next) = do
   pure next
 
-eval (Capture piece next) = do
-  void $ use _pieces >>= (traverse (H.raise <<< Released))
-  assign _pieces [ piece ]
+eval (Capture chunk next) = do
+  void $ use _chunks >>= (traverse (H.raise <<< Released))
+  assign _chunks [ chunk ]
   pure next
 
 eval (Release next) = do
-  void $ use _pieces >>= (traverse (H.raise <<< Released))
-  assign _pieces []
+  void $ use _chunks >>= (traverse (H.raise <<< Released))
+  assign _chunks []
   pure next
 
 eval (Move { dx, dy } next) = do
   let updater transform = push transform $ SA.Translate dx dy
-  modifying (_pieces <<< traversed <<< _transform) updater
+  modifying (_chunks <<< traversed <<< _transform) updater
   pure next
 
 eval (Spin { delta, center } next) = do
   let updater transform = push transform $ SA.Rotate delta center.x center.y
-  modifying (_pieces <<< traversed <<< _transform) updater
+  modifying (_chunks <<< traversed <<< _transform) updater
   pure next
+
+eval (AskChunk reply) = do
+  reply <$> Array.head <$> use _chunks
 
 
 push :: Array Transform -> Transform -> Array Transform

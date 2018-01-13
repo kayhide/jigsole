@@ -4,25 +4,29 @@ import Prelude
 
 import Component.PlayboardUI.Element as Element
 import Control.Monad.Aff (Aff)
+import Control.Monad.Eff.Console (logShow)
+import Control.Monad.Eff.Unsafe (unsafePerformEff)
+import Control.MonadZero (guard)
 import DOM.Event.MouseEvent (MouseEvent)
 import Data.Array as Array
-import Data.Geometry (Face(Curved))
-import Data.Lens (Lens, modifying)
+import Data.Function (on)
+import Data.Geometry (Face(..), Point)
+import Data.Lens (Lens, modifying, use)
 import Data.Lens.Record (prop)
 import Data.Maybe (Maybe(Just, Nothing))
 import Data.Puzzle (Puzzle)
 import Data.Symbol (SProxy(..))
-import Ext.Svg.Attributes as ESA
-import Ext.Svg.Elements as ESE
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
-import Halogen.HTML.Properties as HA
 import Halogen.HTML.Properties as HP
+import Math (sqrt)
+import Math as Math
 import Network.HTTP.Affjax (AJAX)
 import Svg.Attributes (Transform)
 import Svg.Attributes as SA
 import Svg.Elements as SE
+import Util as Util
 
 
 data Slot = Slot
@@ -32,8 +36,9 @@ derive instance ordSlot :: Ord Slot
 
 type PieceId = Int
 
-type Piece =
-  { id :: PieceId
+type Chunk =
+  { ids :: Array PieceId
+  , neighbor_ids :: Array PieceId
   , face :: Face
   , transform :: Array Transform
   }
@@ -44,21 +49,26 @@ _transform = prop (SProxy :: SProxy "transform")
 
 data Query a
   = Initialize a
-  | Pick Piece MouseEvent a
-  | Push Piece a
+  | Pick Chunk MouseEvent a
+  | Put Chunk a
+  | Remove Chunk a
+  | Try Chunk Point (Maybe Chunk -> a)
 
 type Input = Puzzle
 
 data Message
-  = Picked Piece
+  = Picked Chunk
 
 type State =
   { puzzle :: Puzzle
-  , pieces :: Array Piece
+  , chunks :: Array Chunk
   }
 
-_pieces :: forall a b r. Lens { pieces :: a | r } { pieces :: b | r } a b
-_pieces = prop (SProxy :: SProxy "pieces")
+_puzzle :: forall a b r. Lens { puzzle :: a | r } { puzzle :: b | r } a b
+_puzzle = prop (SProxy :: SProxy "puzzle")
+
+_chunks :: forall a b r. Lens { chunks :: a | r } { chunks :: b | r } a b
+_chunks = prop (SProxy :: SProxy "chunks")
 
 
 type Eff_ eff = Aff (ajax :: AJAX | eff)
@@ -77,12 +87,17 @@ ui =
 initialState :: Input -> State
 initialState puzzle =
   { puzzle
-  , pieces
+  , chunks
   }
   where
     transform = []
-    toPiece { id, points } = { id, face: Curved { points }, transform }
-    pieces = toPiece <$> puzzle.pieces
+    toChunk { id, points, neighbor_ids } =
+      { ids: [ id ]
+      , neighbor_ids
+      , face: Curved { points }
+      , transform
+      }
+    chunks = toChunk <$> puzzle.pieces
 
 render :: State -> H.ComponentHTML Query
 render state =
@@ -91,37 +106,18 @@ render state =
   , HP.id_ "base-layer"
   ]
   [
-    ESE.defs [] [ renderPattern ]
-  , SE.g
-    []
-    $ renderPiece <$> pieces
+    SE.g [] $
+    renderChunk <$> chunks
   ]
 
   where
-    pieces = state.pieces
+    chunks = state.chunks
     size = state.puzzle.size
 
-    renderPattern =
-      ESE.pattern
-      [ HA.id_ "img1"
-      , ESA.patternUnits "userSpaceOnUse"
-      , SA.width size.w
-      , SA.height size.h
-      ]
-      [
-        ESE.image
-        [ HA.id_ "image"
-        , SA.x 0.0
-        , SA.y 0.0
-        , SA.width size.w
-        , SA.height size.h
-        ]
-      ]
-
-    renderPiece piece@{ face, transform } =
+    renderChunk chunk@{ face, transform } =
       SE.g
       [
-        HE.onMouseDown $ HE.input $ Pick piece
+        HE.onMouseDown $ HE.input $ Pick chunk
       , SA.transform transform
       ]
       [
@@ -133,11 +129,34 @@ eval :: forall eff. Query ~> H.ComponentDSL State Query Message (Eff_ eff)
 eval (Initialize next) = do
   pure next
 
-eval (Pick piece event next) = do
-  H.raise $ Picked piece
-  modifying _pieces $ Array.filter (notEq piece.id <<< _.id)
+eval (Pick chunk event next) = do
+  modifying _chunks $ Array.deleteBy ((==) `on` _.ids) chunk
+  H.raise $ Picked chunk
   pure next
 
-eval (Push piece next) = do
-  modifying _pieces $ flip Array.snoc piece
+eval (Put chunk next) = do
+  modifying _chunks $ flip Array.snoc chunk
   pure next
+
+eval (Remove chunk next) = do
+  modifying _chunks $ Array.deleteBy ((==) `on` _.ids) chunk
+  pure next
+
+eval (Try chunk point reply) = do
+  x <- _.linear_measure <$> use _puzzle
+  let tolerance = x * x / 256.0
+  reply <$> findMergeableChunk chunk point tolerance <$> use _chunks
+
+
+findMergeableChunk :: Chunk -> Point -> Number -> Array Chunk -> Maybe Chunk
+findMergeableChunk chunk point tolerance chunks = Array.head $ do
+  merger <- chunks
+  guard $ not $ Array.null $ Array.intersect merger.ids chunk.neighbor_ids
+  let pt1 = Util.inverse point merger.transform
+  guard $ Math.abs (Util.angle merger.transform - a0) < 10.0
+  guard $ Util.distanceSquared pt0 pt1 < tolerance
+
+  pure merger
+  where
+    a0 = Util.angle chunk.transform
+    pt0 = Util.inverse point chunk.transform

@@ -20,7 +20,6 @@ var Svg = {
 exports.localPoint = function(event) {
   const svg = event.target.closest('svg');
   const pt = Svg.createPoint(event.clientX, event.clientY);
-  console.log({x: event.clientX, y: event.clientY});
   return pt.matrixTransform(svg.getScreenCTM().inverse());
 };
 
@@ -29,5 +28,21 @@ exports.loadImage = function(id) {
     return function() {
       document.getElementById(id).setAttributeNS('http://www.w3.org/1999/xlink', 'href', url);
     };
+  };
+};
+
+exports.identityMatrix = Svg.identity
+
+exports.translateMatrix = function(dx) {
+  return function(dy) {
+    return function(m) {
+      return m.translate(dx, dy);
+    };
+  };
+};
+
+exports.rotateMatrix = function(angle) {
+  return function(m) {
+    return m.rotate(m);
   };
 };

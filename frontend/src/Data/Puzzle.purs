@@ -14,6 +14,7 @@ type ControlPoint = Maybe Point
 type Piece =
   { id :: Int
   , points :: Array ControlPoint
+  , neighbor_ids :: Array Int
   }
 
 type Puzzle =
@@ -41,9 +42,8 @@ readPiece :: Foreign -> F Piece
 readPiece value = do
   id <- decode =<< value ! "id"
   points <- traverse readControlPoint =<< readArray =<< value ! "points"
-  pure { id
-       , points
-       }
+  neighbor_ids <- traverse decode =<< readArray =<< value ! "neighbor_ids"
+  pure { id, points, neighbor_ids }
 
 readControlPoint :: Foreign -> F ControlPoint
 readControlPoint value =

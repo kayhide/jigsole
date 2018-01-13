@@ -33,3 +33,4 @@ type CurvedRec =
 data Face
   = Circle CircleRec
   | Curved CurvedRec
+  | Merged (Array Face)

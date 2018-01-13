@@ -37,3 +37,6 @@ renderFace (Curved { points }) =
 
     eachSlice i [] = []
     eachSlice i xs = [ Array.take i xs ] <> eachSlice i (Array.drop i xs)
+
+renderFace (Merged faces) =
+  SE.g [] $ renderFace <$> faces
