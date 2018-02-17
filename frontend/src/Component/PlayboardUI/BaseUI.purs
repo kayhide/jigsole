@@ -4,8 +4,6 @@ import Prelude
 
 import Component.PlayboardUI.Element as Element
 import Control.Monad.Aff (Aff)
-import Control.Monad.Eff.Console (logShow)
-import Control.Monad.Eff.Unsafe (unsafePerformEff)
 import Control.MonadZero (guard)
 import DOM.Event.MouseEvent (MouseEvent)
 import Data.Array as Array
@@ -20,8 +18,6 @@ import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
-import Math (sqrt)
-import Math as Math
 import Network.HTTP.Affjax (AJAX)
 import Svg.Attributes (Transform)
 import Svg.Attributes as SA
@@ -144,17 +140,26 @@ eval (Remove chunk next) = do
 
 eval (Try chunk point reply) = do
   x <- _.linear_measure <$> use _puzzle
-  let tolerance = x * x / 256.0
+  let tolerance = { distanceSquared: x * x / 128.0, angle: 7.0 }
   reply <$> findMergeableChunk chunk point tolerance <$> use _chunks
 
 
-findMergeableChunk :: Chunk -> Point -> Number -> Array Chunk -> Maybe Chunk
+type Tolerance =
+  { distanceSquared :: Number
+  , angle :: Number
+  }
+
+findMergeableChunk :: Chunk -> Point -> Tolerance -> Array Chunk -> Maybe Chunk
 findMergeableChunk chunk point tolerance chunks = Array.head $ do
   merger <- chunks
   guard $ not $ Array.null $ Array.intersect merger.ids chunk.neighbor_ids
+  let a1 = Util.angle merger.transform
   let pt1 = Util.inverse point merger.transform
-  guard $ Math.abs (Util.angle merger.transform - a0) < 10.0
-  guard $ Util.distanceSquared pt0 pt1 < tolerance
+  let _ = Util.trace
+          $ "{ angle: " <> show (Util.angleDiff a1 a0) <>
+          ", distance: " <> show (Util.distanceSquared pt0 pt1) <> " }"
+  guard $ Util.angleDiff a1 a0 < tolerance.angle
+  guard $ Util.distanceSquared pt0 pt1 < tolerance.distanceSquared
 
   pure merger
   where

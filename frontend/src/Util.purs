@@ -3,6 +3,8 @@ module Util where
 import Prelude
 
 import Control.Monad.Eff (Eff)
+import Control.Monad.Eff.Console (CONSOLE, log)
+import Control.Monad.Eff.Unsafe (unsafePerformEff)
 import DOM.Event.MouseEvent (MouseEvent)
 import DOM.Event.WheelEvent (WheelEvent)
 import DOM.Event.WheelEvent as WheelEvent
@@ -14,6 +16,9 @@ import Svg.Attributes (Transform(..))
 foreign import localPoint :: MouseEvent -> Point
 
 foreign import loadImage :: forall eff. String -> String -> Eff eff Unit
+
+foreign import logRecordForce :: forall eff r. {| r } -> Eff (console :: CONSOLE | eff) Unit
+
 
 delta :: WheelEvent -> Number
 delta = WheelEvent.deltaX - WheelEvent.deltaY
@@ -72,3 +77,15 @@ angle = regularize <<< Array.foldl angle' 0.0
       _ -> a
 
     regularize x = x - 360.0 * Math.floor (x / 360.0)
+
+angleDiff :: Number -> Number -> Number
+angleDiff a1 a0 = Math.abs $ down $ up (a1 - a0)
+  where
+    up x =
+      if x < -180.0 then x + 360.0 else x
+    down x =
+      if x >= 180.0 then x - 360.0 else x
+
+
+trace :: String -> Unit
+trace = unsafePerformEff <<< log

@@ -264,12 +264,16 @@ eval (Release event next) = do
   pure next
 
 eval (HandleBaseUI (BaseUI.Picked chunk) next) = do
+  let _ = Util.trace
+          $ "Picked: { ids: " <> show chunk.ids <>
+          ", neighbor_ids: " <> show chunk.neighbor_ids <> " }"
   void $ H.query' cpSelectionUI SelectionUI.Slot $ H.action $ SelectionUI.Capture chunk
   pure next
 
 eval (HandleSelectionUI (SelectionUI.Released chunk) next) = do
   use _merging >>= case _ of
     Just { merger, mergee } -> do
+      let _ = Util.trace $ "Merging: " <> show merger.ids <> show mergee.ids
       let merged =
             { ids: merger.ids <> mergee.ids
             , neighbor_ids: Array.nub $ merger.neighbor_ids <> mergee.neighbor_ids

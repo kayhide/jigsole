@@ -23,6 +23,12 @@ exports.localPoint = function(event) {
   return pt.matrixTransform(svg.getScreenCTM().inverse());
 };
 
+exports.logRecordForce = function(r) {
+  return function () {
+    console.log(r);
+  };
+};
+
 exports.loadImage = function(id) {
   return function(url) {
     return function() {
@@ -46,3 +52,5 @@ exports.rotateMatrix = function(angle) {
     return m.rotate(m);
   };
 };
+
+
